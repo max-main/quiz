@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>點名稱簡寫單題刷題</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #16a34a;
+            --error-color: #dc2626;
+            --warning-color: #d97706;
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 12px; display: flex; justify-content: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; }
+        
+        header { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: bold; margin-bottom: 8px; }
+        .progress-bar { width: 100%; height: 8px; background-color: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background-color: var(--primary-color); width: 0%; transition: width 0.2s; }
+
+        .card { background: var(--card-bg); padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 12px; }
+        .question-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 16px; color: var(--text-color); text-align: center; }
+        
+        .options-grid { display: flex; flex-direction: column; gap: 10px; }
+        .option-btn { background: #f8fafc; border: 2px solid #e2e8f0; padding: 14px; border-radius: 10px; text-align: left; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+        .option-btn:active { transform: scale(0.98); }
+        .option-btn.correct { background-color: #dcfce7; border-color: var(--success-color); color: #14532d; }
+        .option-btn.wrong { background-color: #fee2e2; border-color: var(--error-color); color: #7f1d1d; }
+
+        .detail-info { font-size: 0.85rem; font-weight: normal; color: #475569; margin-top: 4px; display: none; }
+        
+        .control-panel { display: flex; gap: 8px; margin-top: 10px; }
+        .action-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: bold; font-size: 0.95rem; cursor: pointer; background: var(--primary-color); color: white; }
+        .reset-btn { background: #64748b; }
+        
+        .report-card { background: var(--card-bg); padding: 18px; border-radius: 12px; margin-top: 10px; }
+        .error-item { padding: 10px; border-radius: 8px; margin-bottom: 6px; background: #f8fafc; border-left: 4px solid #cbd5e1; display: flex; justify-content: space-between; font-size: 0.9rem; }
+        .error-item.repeat { background: #fff7ed; border-left-color: var(--warning-color); }
+        .badge { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+        .badge.high { background: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="header-top">
+            <span id="round-text">第 1 / 5 輪</span>
+            <span id="q-number">題目: 1 / 30</span>
+            <span id="score-text">得分: 0</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </header>
+
+    <div id="quiz-area" class="card">
+        <div class="question-title" id="q-title">載入中...</div>
+        <div class="options-grid" id="options-grid"></div>
+    </div>
+
+    <div class="control-panel">
+        <button class="action-btn" id="next-btn" style="display:none;" onclick="nextQuestion()">下一題 ➔</button>
+        <button class="action-btn reset-btn" onclick="resetAll()">重置紀錄</button>
+    </div>
+
+    <div id="report-area"></div>
+</div>
+
+<script>
+const rawData = [
+  {"abbr": "AHU", "en": "", "zh": "循環空調箱"},
+  {"abbr": "RCU", "en": "", "zh": "循環空調箱"},
+  {"abbr": "MAU", "en": "", "zh": "外氣空調箱"},
+  {"abbr": "PAH", "en": "", "zh": "預冷空調箱"},
+  {"abbr": "FCU", "en": "Fan Coil Unit", "zh": "送風機"},
+  {"abbr": "Fil", "en": "Filter", "zh": "濾網"},
+  {"abbr": "HEPA", "en": "", "zh": "高效濾網"},
+  {"abbr": "FFU", "en": "Fan Filter Unit", "zh": "風車濾網機組"},
+  {"abbr": "HiLvl", "en": "High Level", "zh": "高液位"},
+  {"abbr": "MidLvl", "en": "Mediun Level", "zh": "中水位"},
+  {"abbr": "LoLvl", "en": "Low Level", "zh": "低液位"},
+  {"abbr": "MC", "en": "MagneticContactor", "zh": "電磁接觸器"},
+  {"abbr": "MS", "en": "Magnetic Switch (MS=MC+積熱電驛)", "zh": "電磁開關"},
+  {"abbr": "Cnt", "en": "Counter", "zh": "計數器"},
+  {"abbr": "DO或BO", "en": "", "zh": "啟停"},
+  {"abbr": "St", "en": "State", "zh": "狀態"},
+  {"abbr": "Tr", "en": "Trip", "zh": "跳脫"},
+  {"abbr": "Rst", "en": "Reset", "zh": "歸零、重置"},
+  {"abbr": "Pulse", "en": "Pulse", "zh": "脈波"},
+  {"abbr": "HiAlm", "en": "High Alarm", "zh": "高警報"},
+  {"abbr": "LoAlm", "en": "Low Alarm", "zh": "低警報"},
+  {"abbr": "Disp", "en": "Display", "zh": "顯示幕"},
+  {"abbr": "RunDay", "en": "Running Day", "zh": "運轉天數"},
+  {"abbr": "TK", "en": "Tank", "zh": "桶槽、膨脹水箱"},
+  {"abbr": "PV", "en": "Present Value", "zh": "現在值"},
+  {"abbr": "SP", "en": "Set point", "zh": "設定值"},
+  {"abbr": "Diff", "en": "Differential", "zh": "偏差"},
+  {"abbr": "MD", "en": "Mode", "zh": "模式"},
+  {"abbr": "OP", "en": "Output", "zh": "輸出"},
+  {"abbr": "AV", "en": "AutoValue", "zh": "自動值"},
+  {"abbr": "MV", "en": "ManualValue", "zh": "手動值"},
+  {"abbr": "Duct", "en": "Duct", "zh": "風管"},
+  {"abbr": "Sw", "en": "Supply Water", "zh": "出水"},
+  {"abbr": "Rw", "en": "Return Water", "zh": "回水"},
+  {"abbr": "PCWS", "en": "Progress Cooling Water Supply", "zh": "製程冷卻水出水"},
+  {"abbr": "PCWR", "en": "Progress Cooling Water Return", "zh": "製程冷卻水回水"},
+  {"abbr": "CHS", "en": "Chiller Water Supply", "zh": "冰水出水"},
+  {"abbr": "ChsTs", "en": "Chiller Water Supply Temp", "zh": "冰水出水溫度"},
+  {"abbr": "CHR", "en": "Chiller Water Return", "zh": "冰水回水"},
+  {"abbr": "ChrTs", "en": "Chiller Water Return Temp", "zh": "冰水回水溫度"},
+  {"abbr": "CWS", "en": "Cooling Water Supply", "zh": "冷卻水出水溫度"},
+  {"abbr": "CwsTs", "en": "Cooling Water Supply Temp", "zh": "冷卻水出水"},
+  {"abbr": "CWR", "en": "Cooling Water Return", "zh": "冷卻水回水溫度"},
+  {"abbr": "CwrTs", "en": "Cooling Water Return Temp", "zh": "冷卻水回水"},
+  {"abbr": "CT", "en": "Cooling Tower", "zh": "冷卻水塔"},
+  {"abbr": "CH", "en": "Chiller", "zh": "冰水主機"},
+  {"abbr": "CHP", "en": "Chiller water Pump", "zh": "冰水泵"},
+  {"abbr": "CHSP", "en": "Chiller water Spare Pump", "zh": "冰水預備泵"},
+  {"abbr": "CWP", "en": "Cooling Water Pump", "zh": "冷卻水泵"},
+  {"abbr": "CWSP", "en": "Cooling Water Spare Pump", "zh": "冷卻水預備泵"},
+  {"abbr": "ZP", "en": "Zoom Pump", "zh": "區域泵"},
+  {"abbr": "ZSP", "en": "Zoom Spare Pump", "zh": "區域預備泵"},
+  {"abbr": "Smoke", "en": "Smoke Detector", "zh": "偵煙器"},
+  {"abbr": "Wdpt", "en": "Water Differential Pressure Transmitter", "zh": "水壓差傳訊器"},
+  {"abbr": "Wdps", "en": "Water Differential Pressure Switch", "zh": "水壓差開關"},
+  {"abbr": "ByPassVlv", "en": "ByPass Valve", "zh": "旁通閥"},
+  {"abbr": "AvgTs", "en": "Average Temp", "zh": "平均溫度"},
+  {"abbr": "PreTs", "en": "Prepare Cooling Temp", "zh": "預冷溫度"},
+  {"abbr": "SaTs", "en": "Supply Air Temp", "zh": "出風溫度"},
+  {"abbr": "RaTs", "en": "Retrun Air Temp", "zh": "回風溫度"},
+  {"abbr": "RmTs", "en": "Room Temp", "zh": "室內溫度"},
+  {"abbr": "OaTs", "en": "Ouside Air Temp", "zh": "外氣溫度"},
+  {"abbr": "RwTs", "en": "Return Water Temp", "zh": "回水溫度"},
+  {"abbr": "SwTs", "en": "Supply Water Temp", "zh": "出水溫度"},
+  {"abbr": "Rh", "en": "Relative Humidity", "zh": "相對溼度"},
+  {"abbr": "Ah", "en": "absolute humidity", "zh": "絕對濕度"},
+  {"abbr": "SaRh", "en": "Supply Air Relative Humidity", "zh": "出風相對濕度"},
+  {"abbr": "RaRh", "en": "Retrun Air Relative Humidity", "zh": "回風相對濕度"},
+  {"abbr": "OaRh", "en": "Ouside Air Relative Humidity", "zh": "外氣相對濕度"},
+  {"abbr": "RmRh", "en": "Room Relative Humidity", "zh": "室內相對濕度"},
+  {"abbr": "Dpt", "en": "DewPoint", "zh": "露點"},
+  {"abbr": "SaDp", "en": "Supply Air DewPoint", "zh": "出風露點"},
+  {"abbr": "Flow", "en": "", "zh": "流量"},
+  {"abbr": "PT", "en": "Pressure Transmitter", "zh": "壓力傳訊器"},
+  {"abbr": "SwPt", "en": "Supply Water Pressure Transmitter", "zh": "出水壓力感測"},
+  {"abbr": "RwPt", "en": "Return Water Pressure Transmitter", "zh": "回水壓力感測"},
+  {"abbr": "RmDpt", "en": "Room Differential Pressure Transmitter", "zh": "室內靜壓傳訊器"},
+  {"abbr": "Adpt", "en": "Duct Differential Pressure Transmitter", "zh": "風管靜壓傳訊器"},
+  {"abbr": "ChDpt", "en": "Chiller Differential Pressure Transmitter", "zh": "冰水壓差傳訊器"},
+  {"abbr": "PcwDpt", "en": "Progress Colling Water Differential Pressure Transmitter", "zh": "製程水壓差傳訊器"},
+  {"abbr": "ADps", "en": "Air Differential Pressure Switch", "zh": "風壓差開關"},
+  {"abbr": "WFS", "en": "Water Flow Switch", "zh": "水流開關"},
+  {"abbr": "Dm", "en": "Damper", "zh": "風門"},
+  {"abbr": "SaDmAo", "en": "Supply Air Damper", "zh": "比例式出風風門"},
+  {"abbr": "SaDmDo", "en": "Supply Air Damper", "zh": "ON-OFF式出風風門"},
+  {"abbr": "SaDmFb", "en": "Supply Air Damper", "zh": "出風風門回授"},
+  {"abbr": "OaDm", "en": "Outside Air Damper", "zh": "外氣風門"},
+  {"abbr": "RaDm", "en": "Return Air Damper", "zh": "回風風門"},
+  {"abbr": "Fb", "en": "Fedback", "zh": "回授"},
+  {"abbr": "Vlv", "en": "Valve", "zh": "閥"},
+  {"abbr": "Cv", "en": "Cooling Valve", "zh": "冰水閥"},
+  {"abbr": "CvFb", "en": "Cooling Valve Fedback", "zh": "冰水閥回授"},
+  {"abbr": "Hv", "en": "Heat Valve", "zh": "熱水閥"},
+  {"abbr": "HvFb", "en": "Heat Valve Fedback", "zh": "熱水閥回授"},
+  {"abbr": "Sv", "en": "Steam Valve", "zh": "蒸氣閥"},
+  {"abbr": "SvFb", "en": "Steam Valve Fedback", "zh": "蒸氣閥回授"},
+  {"abbr": "Humi", "en": "Humidifier", "zh": "加濕器"},
+  {"abbr": "Heater", "en": "", "zh": "加熱器"},
+  {"abbr": "Cooling", "en": "", "zh": "降溫/冷卻"},
+  {"abbr": "Heating", "en": "", "zh": "加熱"},
+  {"abbr": "Humiing", "en": "", "zh": "加濕"},
+  {"abbr": "DeHumi", "en": "", "zh": "除濕"},
+  {"abbr": "BV", "en": "Butterfly Valve", "zh": "蝶閥"},
+  {"abbr": "BV_Do", "en": "Butterfly Valve Digital output", "zh": "蝶閥開啟關閉"},
+  {"abbr": "BV_FB_C", "en": "Butterfly Valve Digital intput Close", "zh": "蝶閥回授關"},
+  {"abbr": "BV_FB_O", "en": "Butterfly Valve Digital intput Open", "zh": "蝶閥回授開"},
+  {"abbr": "Coil", "en": "", "zh": "盤管"},
+  {"abbr": "SCR", "en": "", "zh": "電力調整器/無階段控制器"},
+  {"abbr": "Ra", "en": "Return Air", "zh": "回風"},
+  {"abbr": "Sa", "en": "Supply Air", "zh": "出風"},
+  {"abbr": "Rm", "en": "Room", "zh": "室內"},
+  {"abbr": "Oa", "en": "Ouside Air", "zh": "外氣"},
+  {"abbr": "EF", "en": "Exhaust Fan", "zh": "排氣風車"},
+  {"abbr": "Inv", "en": "Inverter", "zh": "變頻器"},
+  {"abbr": "InvAo", "en": "Inverter Analog Output", "zh": "變頻器輸出信號"},
+  {"abbr": "InvFb", "en": "Inverter Fedback", "zh": "變頻器回授信號"}
+];
+
+let currentRound = 1, currentQIndex = 0, score = 0;
+let currentQuestions = [], errorTracker = {};
+
+function shuffle(array) {
+    let arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function loadState() {
+    currentRound = parseInt(localStorage.getItem('quiz_current_round')) || 1;
+    errorTracker = JSON.parse(localStorage.getItem('quiz_error_tracker') || '{}');
+}
+
+function saveState() {
+    localStorage.setItem('quiz_current_round', currentRound);
+    localStorage.setItem('quiz_error_tracker', JSON.stringify(errorTracker));
+}
+
+function resetAll() {
+    if (confirm('確定清空所有紀錄重新開始？')) {
+        localStorage.clear();
+        currentRound = 1; errorTracker = {};
+        document.getElementById('report-area').innerHTML = '';
+        startRound();
+    }
+}
+
+function startRound() {
+    currentQIndex = 0; score = 0;
+    document.getElementById('quiz-area').style.display = 'block';
+    document.getElementById('next-btn').style.display = 'none';
+
+    let history = JSON.parse(localStorage.getItem('quiz_asked_history') || '[]');
+    let unasked = rawData.filter(item => !history.includes(item.abbr));
+    if (unasked.length < 30) { history = []; unasked = [...rawData]; }
+
+    const selected = shuffle(unasked).slice(0, 30);
+    history.push(...selected.map(i => i.abbr));
+    localStorage.setItem('quiz_asked_history', JSON.stringify(history));
+
+    currentQuestions = selected.map(item => {
+        const wrong = shuffle(rawData.filter(d => d.abbr !== item.abbr)).slice(0, 3);
+        return { item, correct: item.abbr, options: shuffle([item, ...wrong]) };
+    });
+
+    renderCurrentQuestion();
+}
+
+function renderCurrentQuestion() {
+    updateHeader();
+    document.getElementById('next-btn').style.display = 'none';
+    const q = currentQuestions[currentQIndex];
+    document.getElementById('q-title').innerText = `${q.item.zh}`;
+    
+    const grid = document.getElementById('options-grid');
+    grid.innerHTML = q.options.map((opt, i) => `
+        <button class="option-btn" id="opt-${i}" onclick="selectAnswer('${opt.abbr}', ${i})">
+            ${opt.abbr}
+            <div class="detail-info" id="detail-${i}">中文：${opt.zh} ${opt.en ? `(${opt.en})` : ''}</div>
+        </button>
+    `).join('');
+}
+
+function selectAnswer(selectedAbbr, idx) {
+    const q = currentQuestions[currentQIndex];
+    const btns = document.querySelectorAll('.option-btn');
+    
+    btns.forEach((btn, i) => {
+        btn.disabled = true;
+        document.getElementById(`detail-${i}`).style.display = 'block';
+        if (q.options[i].abbr === q.correct) btn.classList.add('correct');
+        else if (i === idx) btn.classList.add('wrong');
+    });
+
+    if (selectedAbbr === q.correct) {
+        score++;
+    } else {
+        const abbr = q.item.abbr;
+        errorTracker[abbr] = errorTracker[abbr] || { count: 0, zh: q.item.zh, en: q.item.en };
+        errorTracker[abbr].count++;
+        saveState();
+    }
+
+    updateHeader();
+    document.getElementById('next-btn').style.display = 'block';
+}
+
+function nextQuestion() {
+    currentQIndex++;
+    if (currentQIndex < 30) {
+        renderCurrentQuestion();
+    } else {
+        handleRoundEnd();
+    }
+}
+
+function updateHeader() {
+    document.getElementById('round-text').innerText = `第 ${currentRound} / 5 輪`;
+    document.getElementById('q-number').innerText = `題目: ${Math.min(currentQIndex + 1, 30)} / 30`;
+    document.getElementById('score-text').innerText = `得分: ${score}`;
+    document.getElementById('progress-fill').style.width = `${(currentQIndex / 30) * 100}%`;
+}
+
+function handleRoundEnd() {
+    if (currentRound < 5) {
+        alert(`🎉 第 ${currentRound} 輪結束！得分：${score} / 30`);
+        currentRound++;
+        saveState();
+        startRound();
+    } else {
+        alert(`🏆 5 輪測驗完成！下欄已列出重複錯題總結。`);
+        document.getElementById('quiz-area').style.display = 'none';
+        document.getElementById('next-btn').style.display = 'none';
+        showReport();
+    }
+}
+
+function showReport() {
+    const keys = Object.keys(errorTracker).sort((a,b) => errorTracker[b].count - errorTracker[a].count);
+    const reportArea = document.getElementById('report-area');
+    
+    if (keys.length === 0) {
+        reportArea.innerHTML = `<div class="report-card">🎉 全對！沒有錯題。</div>`;
+        return;
+    }
+
+    let repeatHTML = '', singleHTML = '';
+    keys.forEach(k => {
+        const item = errorTracker[k];
+        const isRepeat = item.count >= 2;
+        const html = `<div class="error-item ${isRepeat?'repeat':''}">
+            <div><strong>${k}</strong> - ${item.zh}</div>
+            <span class="badge ${isRepeat?'high':''}">${item.count} 次</span>
+        </div>`;
+        if (isRepeat) repeatHTML += html; else singleHTML += html;
+    });
+
+    reportArea.innerHTML = `
+        <div class="report-card">
+            <h3>📊 5輪錯題分析報告</h3>
+            <h4 style="color:var(--warning-color)">⚠️ 錯 2 次以上的魔王題：</h4>
+            ${repeatHTML || '<p>無</p>'}
+            <h4>📝 錯 1 次的題目：</h4>
+            ${singleHTML || '<p>無</p>'}
+        </div>
+    `;
+}
+
+window.onload = () => { loadState(); startRound(); };
+</script>
+</body>
+</html>
